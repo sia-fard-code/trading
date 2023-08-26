@@ -23,37 +23,72 @@ double MaxEquity2;
 //| Close all open orders                                            |
 //+------------------------------------------------------------------+
 void CloseAll() {
-    for(int i = OrdersTotal() - 1; i >= 0; i--) {
-      OrderSelect(i, SELECT_BY_POS, MODE_TRADES);
-  
-      if(OrderType() == OP_BUY) {
-        OrderClose(OrderTicket(), OrderLots(), Bid, Slippage, clrAzure);
-      } else if(OrderType() == OP_SELL) {
-        OrderClose(OrderTicket(), OrderLots(), Ask, Slippage, clrSalmon);
-      }
-      
-      Timee = TimeCurrent();
+  for(int i = OrdersTotal() - 1; i >= 0; i--) {
+    if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) 
+      continue;
+
+    if(OrderType() == OP_BUY || OrderType() == OP_SELL) {
+      OrderClose(OrderTicket(), OrderLots(), (OrderType() == OP_BUY) ? Bid : Ask, Slippage);
     }
+
+    Timee = TimeCurrent();
+  }
 }
 
-//+------------------------------------------------------------------+
-//| Expert initialization function                                   |
-//+------------------------------------------------------------------+
-int OnInit() {
-  CloseAll();
-  return(INIT_SUCCEEDED);
+void TradeSell(double orderLot, int magics) {
+  OrderSend(Symbol(), OP_SELL, orderLot, Bid, Slippage, 0, 0, NULL, magics);
+  SellCount += orderLot;
+  Timee = OrderOpenTime();
 }
 
-//+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
-//+------------------------------------------------------------------+
-void OnDeinit(const int reason) {
-  CloseAll();
+void TradeBuy(double orderLot, int magicb) {
+  OrderSend(Symbol(), OP_BUY, orderLot, Ask, Slippage, 0, 0, NULL, magicb);
+  BuyCount += orderLot;
+  Timee = OrderOpenTime();
 }
 
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
+void ActionBuy(double buyLimitUp, double max) {
+  if(BuyCount <= buyLimitUp)
+    return;
+
+  for(double j = max; j >= 0; j -= 0.0001) {
+    CloseBuyProfit(j);
+    CloseBuyLoss(j);
+  }
+}
+
+void ActionSell(double sellLimitUp, double max) {
+  if(SellCount <= sellLimitUp)
+    return;
+
+  for(double j= max; j >= 0; j -= 0.0001) {
+    CloseSellProfit(j);
+    CloseSellLoss(j);
+  }
+}
+
+void CloseBuySellProfitLoss(int ordersType, double limit, COLOR color) {
+  for(int i = OrdersTotal() - 1; i >= 0; i--) {
+    if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) 
+      continue;
+
+    if(OrderType() != ordersType) 
+      continue;
+    
+    double orderOpenPrice = OrderOpenPrice(); 
+    double marketAsk = MarketInfo(Symbol(), MODE_ASK);
+    bool isProfitOrLoss = (orderOpenPrice - marketAsk >= limit) ? true : false;
+    if(isProfitOrLoss) {
+      OrderClose(OrderTicket(), OrderLots(), (OrderType() == OP_BUY) ? Bid : Ask, Slippage, color);
+      if(OrderType() == OP_BUY){
+          BuyCount -= OrderLots();
+      } else if(OrderType() == OP_SELL){
+          SellCount -= OrderLots();
+      }
+    }
+  }
+}
+
 void OnTick() {
   if(OrdersTotal() == 0) {
     Equity = AccountEquity();
@@ -75,7 +110,9 @@ void OnTick() {
   int t1 = OrderSend(Symbol(), OP_SELL, 0.01, Bid, Slippage, 0, 0, NULL, 3, 0, clrNONE);
   OrderClose(t1, 0.01, Ask, Slippage, clrNONE);
 
-  if(AccountEquity() > MaxEquity1) MaxEquity1 = AccountEquity();
+  if(AccountEquity() > MaxEquity1) {
+    MaxEquity1 = AccountEquity();
+  }
 
   bool isEquityIncreased = AccountEquity() - Equity > 0;
   bool isMarginSafe = AccountMargin() < (0.75 * AccountEquity());
@@ -86,36 +123,47 @@ void OnTick() {
     Equity = AccountEquity();
   }
 
-  if(isEquityIncreased && BuyCount <= SellCount) {
-    TradeSell(20 * volume, 2);
-    if(AccountMargin()< 0.95 * AccountEquity()) CloseBuyLoss1(0.0138);
-    if(BuyCount > SellCount) CloseBuyProfit1(0.0018, 1);
-    Equity = AccountEquity();
-  }
+  if(AccountEquity() - Equity < 0) {
+    if(BuyCount <= SellCount) {
+      TradeSell(20 * volume, 2);
+      if(AccountMargin() < 0.95 * AccountEquity()) {
+        CloseBuySellProfitLoss(OP_BUY, 0.0138, clrNONE);
+      }
+      if(BuyCount > SellCount) {
+        CloseBuySellProfitLoss(OP_BUY, 0.0018, clrNONE);
+      }
+      Equity = AccountEquity();
+    }
 
-  if(isEquityIncreased && BuyCount > SellCount) {
-    TradeBuy(2 * volume, 2);
-    if(AccountMargin() < 0.95 * AccountEquity()) CloseSellLoss1(0.0138);
-    if(BuyCount < SellCount) CloseSellProfit1(0.0018, 1);
-    Equity = AccountEquity();
+    if(BuyCount > SellCount) {
+      TradeBuy(2 * volume, 2);
+      if(AccountMargin() < 0.95 * AccountEquity()) {
+        CloseBuySellProfitLoss(OP_SELL, 0.0138, clrNONE);
+      }
+      if(BuyCount < SellCount) {
+        CloseBuySellProfitLoss(OP_SELL, 0.0018, clrNONE);
+      }
+      Equity = AccountEquity();
+    }
   }
 
   if(MathAbs(Bid - LastPrice) > 0.0001) {
     LastPrice = Bid;
   }
-}
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void TradeBuy(double OrderLot, int magicb) {
-  OrderSend(Symbol(), OP_BUY,OrderLot, Ask, Slippage, 0,0, NULL, magicb, 0, clrNONE);
-  BuyCount = BuyCount + OrderLot;
-}
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void TradeSell(double OrderLot, int magics) {
-  OrderSend(Symbol(), OP_SELL, OrderLot, Bid, Slippage, 0, 0, NULL, magics, 0, clrNONE);
-  SellCount = SellCount + OrderLot;
+// Check if bid price has been updated
+  if (MathAbs(Bid - LastPrice) > 0.0001) {
+    // Trade Buy with certain conditions
+    if (BuyCount > SellCount && AccountMargin() < 0.95 * AccountEquity() && AccountEquity() - MaxEquity1 < 0.05 * MaxEquity1) {
+      TradeSell(NormalizeDouble(0.00057 * AccountEquity() * volume, 2), 1);
+      CloseBuySellProfitLoss(OP_BUY, 0.0012, clrNONE);
+      Equity = AccountEquity();
+    }
+      
+    // Trade Sell with certain conditions 
+    if (BuyCount <= SellCount && AccountMargin() < 0.95 * AccountEquity() && AccountEquity() - MaxEquity1 < 0.05 * MaxEquity1) {
+      TradeBuy(NormalizeDouble(0.00057 * AccountEquity() * volume, 2), 1);
+      CloseBuySellProfitLoss(OP_SELL, 0.0012, clrNONE);
+      Equity = AccountEquity();
+    }
+  }
 }
