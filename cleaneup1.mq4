@@ -4,20 +4,27 @@
 //|                                       http://www.companyname.net |
 //+------------------------------------------------------------------+
 
+// Input variables
 input double volume;
-double Step = 0.0002;
 input int TotalTP;
+
+// Variables for trade settings
+double Step = 0.0002;
 int Slippage = 5;
-double LastPrice;
+
+// Variables for data and trading
 double Equity;
-double BuyCount = 0;
-double SellCount = 0;
+double LastPrice;
+double BuyCount;
+double SellCount;
+
 double InitialEquity;
-double buyclosed;
-double sellclosed;
-datetime Timee;
 double MaxEquity1;
 double MaxEquity2;
+
+int buyclosed;
+int sellclosed;
+datetime Timee;
 
 //+------------------------------------------------------------------+
 //| Close all open orders                                            |
