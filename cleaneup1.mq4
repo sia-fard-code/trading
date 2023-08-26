@@ -1,204 +1,121 @@
-input double volume;
-double Step=0.0002;
+//+------------------------------------------------------------------+
+//|                                                      ProjectName |
+//|                                      Copyright 2018, CompanyName |
+//|                                       http://www.companyname.net |
+//+------------------------------------------------------------------+
 
+input double volume;
+double Step = 0.0002;
 input int TotalTP;
 int Slippage = 5;
-
-double MaxEquity;
+double LastPrice;
 double Equity;
-double OrderNumber=0;
-
-double SellCount=0;
-double BuyCount=0;
-
+double BuyCount = 0;
+double SellCount = 0;
 double InitialEquity;
-
+double buyclosed;
+double sellclosed;
 datetime Timee;
+double MaxEquity1;
+double MaxEquity2;
 
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Close all open orders                                            |
 //+------------------------------------------------------------------+
-void CloseAll()
-  {
-   for(int i=OrdersTotal()-1; i>=0; i--)
-     {
-      OrderSelect(i,SELECT_BY_POS,MODE_TRADES);
-
-      if(OrderType()==OP_BUY || OrderType()==OP_SELL)
-         OrderClose(OrderTicket(),OrderLots(),OrderType() == OP_BUY ? Bid : Ask,Slippage,clrNONE);
-
-      Timee=TimeCurrent();
-     }
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void Calculate()
-  {
-   SellCount = 0;
-   BuyCount = 0;
-
-   for(int i=OrdersTotal()-1; i>=0; i--)
-     {
-      OrderSelect(i,SELECT_BY_POS, MODE_TRADES);
-
-      if(OrderType()==OP_BUY)
-         BuyCount += OrderLots();
-
-      if(OrderType()==OP_SELL)
-         SellCount += OrderLots();
-     }
-  }
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CloseProfitLoss(double threshold, int magic)
-{
-   for(int i=OrdersTotal()-1; i>=0; i--)
-   {
-      OrderSelect(i,SELECT_BY_POS,MODE_TRADES);
-
-      if(OrderType() == OP_BUY && MarketInfo(Symbol(),MODE_ASK) - OrderOpenPrice() >= threshold && OrderMagicNumber() == magic)
-      {
-         OrderClose(OrderTicket(), OrderLots(), Bid, Slippage, clrNONE);
-         BuyCount -= OrderLots();
+void CloseAll() {
+    for(int i = OrdersTotal() - 1; i >= 0; i--) {
+      OrderSelect(i, SELECT_BY_POS, MODE_TRADES);
+  
+      if(OrderType() == OP_BUY) {
+        OrderClose(OrderTicket(), OrderLots(), Bid, Slippage, clrAzure);
+      } else if(OrderType() == OP_SELL) {
+        OrderClose(OrderTicket(), OrderLots(), Ask, Slippage, clrSalmon);
       }
       
-      if(OrderType() == OP_SELL && OrderOpenPrice() - MarketInfo(Symbol(),MODE_ASK) >= threshold && OrderMagicNumber() == magic)
-      {
-         OrderClose(OrderTicket(), OrderLots(), Ask, Slippage, clrNONE);
-         SellCount -= OrderLots();
-      }
-   }
-}
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void CloseLoss(double threshold)
-{
-   for(int i=OrdersTotal()-1; i>=0; i--)
-   {
-      OrderSelect(i,SELECT_BY_POS,MODE_TRADES);
-
-      if(OrderType() == OP_BUY && OrderOpenPrice() > MarketInfo(Symbol(),MODE_ASK) + threshold)
-      {
-         OrderClose(OrderTicket(), OrderLots(), Bid, Slippage, clrNONE);
-      }
-      
-      if(OrderType() == OP_SELL && MarketInfo(Symbol(),MODE_ASK) > OrderOpenPrice() + threshold)
-      {
-         OrderClose(OrderTicket(), OrderLots(), Ask, Slippage, clrNONE);
-      }
-   }
-}
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void DeleteAll()
-{
-   for(int i=OrdersTotal()-1; i>=0; i--)
-   {
-      OrderSelect(i,SELECT_BY_POS,MODE_TRADES);
-
-      if(OrderType()==OP_SELLSTOP || OrderType()==OP_BUYSTOP || OrderType()==OP_SELLLIMIT || OrderType()==OP_BUYLIMIT)
-      {
-         OrderDelete(OrderTicket());
-      }
-   }
-}
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void TradeSell(double OrderLot,int magics)
-{
-   OrderSend(Symbol(), OP_SELL, OrderLot, Bid, Slippage,0,0, NULL, magics, 0, clrNONE);
-   SellCount += OrderLot;
-   OrderSelect(OrderTicket(),SELECT_BY_TICKET,MODE_TRADES);
-   Timee=OrderOpenTime();
-}
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void TradeBuy(double OrderLot,int magicb)
-{
-   OrderSend(Symbol(), OP_BUY,OrderLot, Ask, Slippage, 0,0, NULL, magicb, 0, clrNONE);
-   BuyCount += OrderLot;
-   OrderSelect(OrderTicket(),SELECT_BY_TICKET,MODE_TRADES);
-   Timee=OrderOpenTime();
-}
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-void Reset()
-{
-
+      Timee = TimeCurrent();
+    }
 }
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
-int OnInit()
-{
-   CloseAll();
-   DeleteAll();
-   Reset();
-
-   return(INIT_SUCCEEDED);
+int OnInit() {
+  CloseAll();
+  return(INIT_SUCCEEDED);
 }
 
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
-void OnDeinit(const int reason)
-{
-   CloseAll();
-   DeleteAll();
-   Reset();
+void OnDeinit(const int reason) {
+  CloseAll();
 }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void OnTick()
-{
-   if(OrdersTotal() == 0)
-   {
-      Equity = AccountEquity();
-      OrderSend(Symbol(), OP_BUY,3*volume, Ask, Slippage,0,0,NULL, 1, 0, clrNONE);
-      InitialEquity = AccountEquity();
-      BuyCount = 3*volume;
-      SellCount = 0;
-      Timee = 0;
-      OrderNumber = 2;
-   }
+void OnTick() {
+  if(OrdersTotal() == 0) {
+    Equity = AccountEquity();
+    LastPrice = Bid;
+    OrderSend(Symbol(), OP_BUY, 3*volume, Ask, Slippage, 0, 0, NULL, 1, 0, clrNONE);
+    InitialEquity = AccountEquity();
+    MaxEquity1 = AccountEquity();
+    MaxEquity2 = AccountEquity();
+    BuyCount = 3*volume;
+    SellCount = 0;
+    Timee = 0;
+  }
 
-   if(AccountEquity() > InitialEquity + TotalTP)
-   {
-      CloseAll();
-      InitialEquity = AccountEquity();
-   }
+  if(AccountEquity() > InitialEquity + TotalTP) {
+    CloseAll();
+    InitialEquity = AccountEquity();
+  }
 
-   Calculate();
+  int t1 = OrderSend(Symbol(), OP_SELL, 0.01, Bid, Slippage, 0, 0, NULL, 3, 0, clrNONE);
+  OrderClose(t1, 0.01, Ask, Slippage, clrNONE);
 
-   // Add your trading logic here
-   
-   // Example usage of CloseProfitLoss and CloseLoss functions
-   if(BuyCount > SellCount)
-   {
-      CloseProfitLoss(0.0001, 1);
-      CloseLoss(0.0002);
-   }
-   
-   if(BuyCount <= SellCount)
-   {
-      CloseProfitLoss(0.0001, 2);
-      CloseLoss(0.0002);
-   }
+  if(AccountEquity() > MaxEquity1) MaxEquity1 = AccountEquity();
+
+  bool isEquityIncreased = AccountEquity() - Equity > 0;
+  bool isMarginSafe = AccountMargin() < (0.75 * AccountEquity());
+  bool isMaxEquitySafe = MaxEquity1 - AccountEquity() < 0.05 * MaxEquity1;
+
+  if(isEquityIncreased && isMarginSafe && isMaxEquitySafe) {
+    TradeBuy(NormalizeDouble(0.00057 * AccountEquity() * volume, 2), 1);
+    Equity = AccountEquity();
+  }
+
+  if(isEquityIncreased && BuyCount <= SellCount) {
+    TradeSell(20 * volume, 2);
+    if(AccountMargin()< 0.95 * AccountEquity()) CloseBuyLoss1(0.0138);
+    if(BuyCount > SellCount) CloseBuyProfit1(0.0018, 1);
+    Equity = AccountEquity();
+  }
+
+  if(isEquityIncreased && BuyCount > SellCount) {
+    TradeBuy(2 * volume, 2);
+    if(AccountMargin() < 0.95 * AccountEquity()) CloseSellLoss1(0.0138);
+    if(BuyCount < SellCount) CloseSellProfit1(0.0018, 1);
+    Equity = AccountEquity();
+  }
+
+  if(MathAbs(Bid - LastPrice) > 0.0001) {
+    LastPrice = Bid;
+  }
+}
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void TradeBuy(double OrderLot, int magicb) {
+  OrderSend(Symbol(), OP_BUY,OrderLot, Ask, Slippage, 0,0, NULL, magicb, 0, clrNONE);
+  BuyCount = BuyCount + OrderLot;
+}
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void TradeSell(double OrderLot, int magics) {
+  OrderSend(Symbol(), OP_SELL, OrderLot, Bid, Slippage, 0, 0, NULL, magics, 0, clrNONE);
+  SellCount = SellCount + OrderLot;
 }
